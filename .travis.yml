@@ -22,7 +22,7 @@ script:
   - ./configure --with-precision=single && make && ./scripts/test.sh
   - ./configure --with-precision=double && make && ./scripts/test.sh
   - ./configure --debug --with-precision=single && make && ./scripts/test.sh
-  - ./scripts/coverage.sh
+  - if [[ "$TRAVIS_OS_NAME" == "linux" && "$CC" == "gcc" ]]; then ./scripts/coverage.sh ; fi
 
 # codecov.io
 after_success:
