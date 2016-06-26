@@ -16,7 +16,6 @@ addons:
   apt:
     packages:
       - libatlas-dev
-      - gcc-4.8
 
 before_install:
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew update && brew install homebrew/science/openblas ; fi
