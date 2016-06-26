@@ -13,6 +13,8 @@ compiler:
 addons:
   apt:
     packages:
+      - gcc
+      - gcov
       - libatlas-dev
 
 before_install:
