@@ -4,6 +4,7 @@ sudo: false
 
 os:
   - linux
+    dist: trusty
   #- osx
 
 compiler:
@@ -13,8 +14,6 @@ compiler:
 addons:
   apt:
     packages:
-      - gcc
-      - gcov
       - libatlas-dev
 
 before_install:
