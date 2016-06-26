@@ -1,6 +1,7 @@
 
 *.swp
 *.o
+*.gcov
 
 # compiled matlab files
 *.mex
