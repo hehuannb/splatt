@@ -10,15 +10,19 @@ os:
 
 compiler:
   - gcc
-  - clang
+  #- clang
 
 addons:
   apt:
     packages:
       - libatlas-dev
+      - gcc-4.8
 
 before_install:
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew update && brew install homebrew/science/openblas ; fi
+  - gcc --version
+  - gcc-4.8 --version
+  - gcc-4.8 -V
 
 script:
   - ./configure --with-precision=single && make && ./scripts/test.sh
