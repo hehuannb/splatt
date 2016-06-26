@@ -8,6 +8,7 @@ if (DEFINED DEBUG)
   set(CMAKE_BUILD_TYPE Debug)
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O0")
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g")
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} --coverage")
 
   set(SPLATT_WARNINGS true)
 else()
