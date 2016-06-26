@@ -2,9 +2,10 @@
 language: c
 sudo: false
 
+dist: trusty
+
 os:
   - linux
-    dist: trusty
   #- osx
 
 compiler:
