@@ -8,9 +8,20 @@
 #include "util.h"
 #include "timer.h"
 
+#include "io.h"
+
+/* override memory allocators */
+#define LAPACK_malloc splatt_malloc
+#define LAPACK_free   splatt_free
+#include <lapacke.h>
+#undef I /* <complex.h> has '#define I _Complex_I'. WHY WOULD YOU DO THAT */
+
+#include <cblas.h>
+
 #include <math.h>
 
 
+#if 1
 #if   SPLATT_VAL_TYPEWIDTH == 32
   void spotrf_(char *, int *, float *, int *, int *);
   void spotrs_(char *, int *, int *, float *, int *, float *, int *, int *);
@@ -28,6 +39,7 @@
   #define LAPACK_DGETRS sgetrs_
   #define LAPACK_DGELSS sgelss_
 #else
+#if 0
   void dpotrf_(char *, int *, double *, int *, int *);
   void dpotrs_(char *, int *, int *, double *, int *, double *, int *, int *);
   void dsyrk_(char *, char *, int *, int *, double *, double *, int *, double *, double *, int *);
@@ -38,6 +50,7 @@
 
   /* SVD solve */
   void dgelss_(int *, int *, int *, double *, int *, double *, int *, double *, double *,   int *, double *, int *, int *);
+#endif
 
   #define LAPACK_DPOTRF dpotrf_
   #define LAPACK_DPOTRS dpotrs_
@@ -45,6 +58,7 @@
   #define LAPACK_DGETRF dgetrf_
   #define LAPACK_DGETRS dgetrs_
   #define LAPACK_DGELSS dgelss_
+#endif
 #endif
 
 
@@ -109,7 +123,7 @@ static void p_form_gram(
 
     #pragma omp barrier
 
-    /* now copy lower triangular */
+    /* copy lower triangular */
     #pragma omp for schedule(static, 1)
     for(int i=0; i < N; ++i) {
       for(int j=0; j < i; ++j) {
@@ -463,6 +477,7 @@ void mat_aTa(
   assert(A->rowmajor);
   assert(ret->rowmajor);
 
+#if 0
   idx_t const I = A->I;
   idx_t const F = A->J;
   val_t const * const restrict Av = A->vals;
@@ -478,6 +493,16 @@ void mat_aTa(
 
   LAPACK_DSYRK(&uplo, &trans, &N, &K, &alpha, A->vals, &lda, &beta, ret->vals,
       &ldc);
+#else
+  /* A^T * A */
+  cblas_dsyrk(
+      CblasRowMajor, CblasUpper, CblasTrans,
+      A->J, A->I, /* swapped due to trans */
+      1.,
+      A->vals, A->J,
+      0.,
+      ret->vals, A->J);
+#endif
 
 #ifdef SPLATT_USE_MPI
   timer_start(&timers[TIMER_MPI_ATA]);
@@ -572,23 +597,27 @@ void mat_solve_normals(
 {
   timer_start(&timers[TIMER_INV]);
 
-  /* nfactors */
-  int N = aTa[0]->J;
-
   p_form_gram(aTa[MAX_NMODES], aTa, mode, nmodes, reg);
 
-  int info;
+  lapack_int info;
   char uplo = 'L';
-  int lda = N;
-  int ldb = N;
-  int order = N;
-  int nrhs = (int) rhs->I;
+
+  /* nfactors */
+  lapack_int N = aTa[0]->J;
+  lapack_int lda = N;
+  lapack_int ldb = N;
+  lapack_int order = N;
+  lapack_int nrhs = rhs->I;
 
   val_t * const neqs = aTa[MAX_NMODES]->vals;
 
   /* Cholesky factorization */
   bool is_spd = true;
+#if 0
   LAPACK_DPOTRF(&uplo, &order, neqs, &lda, &info);
+#else
+  info = LAPACKE_dpotrf(LAPACK_COL_MAJOR, uplo, order, neqs, lda);
+#endif
   if(info) {
     fprintf(stderr, "SPLATT: Gram matrix is not SPD. Trying `GELSS`.\n");
     is_spd = false;
@@ -597,7 +626,9 @@ void mat_solve_normals(
   /* Continue with Cholesky */
   if(is_spd) {
     /* Solve against rhs */
-    LAPACK_DPOTRS(&uplo, &order, &nrhs, neqs, &lda, rhs->vals, &ldb, &info);
+    //LAPACK_DPOTRS(&uplo, &order, &nrhs, neqs, &lda, rhs->vals, &ldb, &info);
+    info = LAPACKE_dpotrs(LAPACK_COL_MAJOR, uplo, order, nrhs, neqs, lda,
+        rhs->vals, ldb);
     if(info) {
       fprintf(stderr, "SPLATT: DPOTRS returned %d\n", info);
     }
@@ -605,6 +636,7 @@ void mat_solve_normals(
     /* restore gram matrix */
     p_form_gram(aTa[MAX_NMODES], aTa, mode, nmodes, reg);
 
+#if 0
     int effective_rank;
     val_t * conditions = splatt_malloc(N * sizeof(*conditions));
 
@@ -637,6 +669,21 @@ void mat_solve_normals(
 
     splatt_free(conditions);
     splatt_free(work);
+#else
+    /* Use column major to avoid any internal transposition. */
+    val_t * conditions = splatt_malloc(N * sizeof(*conditions));
+    val_t rcond = -1.0f;
+    lapack_int effective_rank;
+    info = LAPACKE_dgelss(LAPACK_COL_MAJOR, N, N, nrhs,
+        neqs, lda,
+        rhs->vals, ldb,
+        conditions, rcond, &effective_rank);
+    if(info) {
+      printf("SPLATT: DGELSS returned %d\n", info);
+    }
+    printf("SPLATT:   DGELSS effective rank: %d\n", effective_rank);
+    splatt_free(conditions);
+#endif
   }
 
   timer_stop(&timers[TIMER_INV]);
