@@ -10,55 +10,27 @@
 
 #include "io.h"
 
+
+
+/******************************************************************************
+ * BLAS/LAPACKE FUNCTIONS
+ *****************************************************************************/
+
 /* override memory allocators */
 #define LAPACK_malloc splatt_malloc
 #define LAPACK_free   splatt_free
 #include <lapacke.h>
-#undef I /* <complex.h> has '#define I _Complex_I'. WHY WOULD YOU DO THAT */
+#undef I /* <complex.h> has '#define I _Complex_I'. WHY WOULD THEY DO THAT? */
 
 #include <cblas.h>
-
 #include <math.h>
 
-
-#if 1
 #if   SPLATT_VAL_TYPEWIDTH == 32
-  void spotrf_(char *, int *, float *, int *, int *);
-  void spotrs_(char *, int *, int *, float *, int *, float *, int *, int *);
-  void ssyrk_(char *, char *, int *, int *, float *, float *, int *, float *, float *, int *);
-
-  void sgetrf_(int *, int *, float *, int *, int *, int *);
-  void sgetrs_(char *, int *, int *, float *, int *, int *, float *, int *, int *);
-
-  void sgelss_(int *, int *, int *, float *, int *, float *, int *, float *, float *,   int *, float *, int *, int *);
-
-  #define LAPACK_DPOTRF spotrf_
-  #define LAPACK_DPOTRS spotrs_
-  #define LAPACK_DSYRK  ssyrk_
-  #define LAPACK_DGETRF sgetrf_
-  #define LAPACK_DGETRS sgetrs_
-  #define LAPACK_DGELSS sgelss_
+  #define SPLATT_CBLAS(x)     cblas_s ## x
+  #define SPLATT_LAPACKE(x) LAPACKE_s ## x
 #else
-#if 0
-  void dpotrf_(char *, int *, double *, int *, int *);
-  void dpotrs_(char *, int *, int *, double *, int *, double *, int *, int *);
-  void dsyrk_(char *, char *, int *, int *, double *, double *, int *, double *, double *, int *);
-
-  /* LU */
-  void dgetrf_(int *, int *, double *, int *, int *, int *);
-  void dgetrs_(char *, int *, int *, double *, int *, int *, double *, int *, int *);
-
-  /* SVD solve */
-  void dgelss_(int *, int *, int *, double *, int *, double *, int *, double *, double *,   int *, double *, int *, int *);
-#endif
-
-  #define LAPACK_DPOTRF dpotrf_
-  #define LAPACK_DPOTRS dpotrs_
-  #define LAPACK_DSYRK  dsyrk_
-  #define LAPACK_DGETRF dgetrf_
-  #define LAPACK_DGETRS dgetrs_
-  #define LAPACK_DGELSS dgelss_
-#endif
+  #define SPLATT_CBLAS(x)     cblas_d ## x
+  #define SPLATT_LAPACKE(x) LAPACKE_d ## x
 #endif
 
 
@@ -495,7 +467,7 @@ void mat_aTa(
       &ldc);
 #else
   /* A^T * A */
-  cblas_dsyrk(
+  SPLATT_CBLAS(syrk)(
       CblasRowMajor, CblasUpper, CblasTrans,
       A->J, A->I, /* swapped due to trans */
       1.,
@@ -616,7 +588,7 @@ void mat_solve_normals(
 #if 0
   LAPACK_DPOTRF(&uplo, &order, neqs, &lda, &info);
 #else
-  info = LAPACKE_dpotrf(LAPACK_COL_MAJOR, uplo, order, neqs, lda);
+  info = SPLATT_LAPACKE(potrf)(LAPACK_COL_MAJOR, uplo, order, neqs, lda);
 #endif
   if(info) {
     fprintf(stderr, "SPLATT: Gram matrix is not SPD. Trying `GELSS`.\n");
@@ -627,7 +599,9 @@ void mat_solve_normals(
   if(is_spd) {
     /* Solve against rhs */
     //LAPACK_DPOTRS(&uplo, &order, &nrhs, neqs, &lda, rhs->vals, &ldb, &info);
-    info = LAPACKE_dpotrs(LAPACK_COL_MAJOR, uplo, order, nrhs, neqs, lda,
+    info = SPLATT_LAPACKE(potrs)(LAPACK_COL_MAJOR, uplo,
+        order, nrhs,
+        neqs, lda,
         rhs->vals, ldb);
     if(info) {
       fprintf(stderr, "SPLATT: DPOTRS returned %d\n", info);
@@ -674,7 +648,7 @@ void mat_solve_normals(
     val_t * conditions = splatt_malloc(N * sizeof(*conditions));
     val_t rcond = -1.0f;
     lapack_int effective_rank;
-    info = LAPACKE_dgelss(LAPACK_COL_MAJOR, N, N, nrhs,
+    info = SPLATT_LAPACKE(gelss)(LAPACK_COL_MAJOR, N, N, nrhs,
         neqs, lda,
         rhs->vals, ldb,
         conditions, rcond, &effective_rank);
