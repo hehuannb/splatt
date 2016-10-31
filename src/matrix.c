@@ -7,8 +7,7 @@
 #include "matrix.h"
 #include "util.h"
 #include "timer.h"
-
-#include "io.h"
+#include <math.h>
 
 
 
@@ -19,11 +18,25 @@
 /* override memory allocators */
 #define LAPACK_malloc splatt_malloc
 #define LAPACK_free   splatt_free
-#include <lapacke.h>
-#undef I /* <complex.h> has '#define I _Complex_I'. WHY WOULD THEY DO THAT? */
 
-#include <cblas.h>
-#include <math.h>
+
+/* MKL requires mkl_lapacke.h */
+#ifndef SPLATT_INC_LAPACKE
+#define SPLATT_INC_LAPACKE "lapacke.h"
+#endif
+
+#ifndef SPLATT_INC_CBLAS
+#define SPLATT_INC_CBLAS   "cblas.h"
+#endif
+
+/* Actual includes */
+#include SPLATT_INC_LAPACKE
+#include SPLATT_INC_CBLAS
+
+#undef I /* <complex.h> has '#define I _Complex_I'. WHY WOULD THEY DO THAT? */
+#undef LAPACK_malloc
+#undef LAPACK_free
+
 
 #if   SPLATT_VAL_TYPEWIDTH == 32
   #define SPLATT_CBLAS(x)     cblas_s ## x
@@ -32,6 +45,8 @@
   #define SPLATT_CBLAS(x)     cblas_d ## x
   #define SPLATT_LAPACKE(x) LAPACKE_d ## x
 #endif
+
+
 
 
 
@@ -307,42 +322,6 @@ static void p_mat_backwardsolve(
  * PUBLIC FUNCTIONS
  *****************************************************************************/
 
-void mat_syminv(
-  matrix_t * const A)
-{
-  /* check dimensions */
-  assert(A->I == A->J);
-
-  idx_t const N = A->I;
-
-  matrix_t * L = mat_alloc(N, N);
-
-  /* do a Cholesky factorization on A */
-  mat_cholesky(A, L);
-
-  /* setup identity matrix */
-  memset(A->vals, 0, N*N*sizeof(val_t));
-  for(idx_t n=0; n < N; ++n) {
-    A->vals[n+(n*N)] = 1.;
-  }
-
-  /* Solve L*Y = I */
-  p_mat_forwardsolve(L, A);
-
-  /* transpose L */
-  for(idx_t i=0; i < N; ++i) {
-    for(idx_t j=i+1; j < N; ++j) {
-      L->vals[j+(i*N)] = L->vals[i+(j*N)];
-      L->vals[i+(j*N)] = 0.;
-    }
-  }
-
-  /* Solve U*A = Y */
-  p_mat_backwardsolve(L, A);
-
-  mat_free(L);
-}
-
 
 void mat_cholesky(
   matrix_t const * const A,
@@ -375,65 +354,6 @@ void mat_cholesky(
 }
 
 
-void mat_aTa_hada(
-  matrix_t ** mats,
-  idx_t const start,
-  idx_t const nmults,
-  idx_t const nmats,
-  matrix_t * const buf,
-  matrix_t * const ret)
-{
-  idx_t const F = mats[0]->J;
-
-  /* check matrix dimensions */
-  assert(ret->I == ret->J);
-  assert(ret->I == F);
-  assert(buf->I == F);
-  assert(buf->J == F);
-  assert(ret->vals != NULL);
-  assert(mats[0]->rowmajor);
-  assert(ret->rowmajor);
-
-  val_t       * const restrict rv   = ret->vals;
-  val_t       * const restrict bufv = buf->vals;
-  for(idx_t i=0; i < F; ++i) {
-    for(idx_t j=i; j < F; ++j) {
-      rv[j+(i*F)] = 1.;
-    }
-  }
-
-  for(idx_t mode=0; mode < nmults; ++mode) {
-    idx_t const m = (start+mode) % nmats;
-    idx_t const I  = mats[m]->I;
-    val_t const * const Av = mats[m]->vals;
-    memset(bufv, 0, F * F * sizeof(val_t));
-
-    /* compute upper triangular matrix */
-    for(idx_t i=0; i < I; ++i) {
-      for(idx_t mi=0; mi < F; ++mi) {
-        for(idx_t mj=mi; mj < F; ++mj) {
-          bufv[mj + (mi*F)] += Av[mi + (i*F)] * Av[mj + (i*F)];
-        }
-      }
-    }
-
-    /* hadamard product */
-    for(idx_t mi=0; mi < F; ++mi) {
-      for(idx_t mj=mi; mj < F; ++mj) {
-        rv[mj + (mi*F)] *= bufv[mj + (mi*F)];
-      }
-    }
-  }
-
-  /* copy to lower triangular matrix */
-  for(idx_t i=1; i < F; ++i) {
-    for(idx_t j=0; j < i; ++j) {
-      rv[j + (i*F)] = rv[i + (j*F)];
-    }
-  }
-}
-
-
 void mat_aTa(
   matrix_t const * const A,
   matrix_t * const ret,
@@ -449,23 +369,6 @@ void mat_aTa(
   assert(A->rowmajor);
   assert(ret->rowmajor);
 
-#if 0
-  idx_t const I = A->I;
-  idx_t const F = A->J;
-  val_t const * const restrict Av = A->vals;
-
-  char uplo = 'L';
-  char trans = 'N'; /* actually do A * A' due to row-major ordering */
-  int N = (int) F;
-  int K = (int) I;
-  int lda = N;
-  int ldc = N;
-  val_t alpha = 1.;
-  val_t beta = 0.;
-
-  LAPACK_DSYRK(&uplo, &trans, &N, &K, &alpha, A->vals, &lda, &beta, ret->vals,
-      &ldc);
-#else
   /* A^T * A */
   SPLATT_CBLAS(syrk)(
       CblasRowMajor, CblasUpper, CblasTrans,
@@ -474,7 +377,6 @@ void mat_aTa(
       A->vals, A->J,
       0.,
       ret->vals, A->J);
-#endif
 
 #ifdef SPLATT_USE_MPI
   timer_start(&timers[TIMER_MPI_ATA]);
@@ -585,11 +487,9 @@ void mat_solve_normals(
 
   /* Cholesky factorization */
   bool is_spd = true;
-#if 0
-  LAPACK_DPOTRF(&uplo, &order, neqs, &lda, &info);
-#else
-  info = SPLATT_LAPACKE(potrf)(LAPACK_COL_MAJOR, uplo, order, neqs, lda);
-#endif
+  info = SPLATT_LAPACKE(potrf)(
+      LAPACK_COL_MAJOR, uplo, order,
+      neqs, lda);
   if(info) {
     fprintf(stderr, "SPLATT: Gram matrix is not SPD. Trying `GELSS`.\n");
     is_spd = false;
@@ -598,8 +498,8 @@ void mat_solve_normals(
   /* Continue with Cholesky */
   if(is_spd) {
     /* Solve against rhs */
-    //LAPACK_DPOTRS(&uplo, &order, &nrhs, neqs, &lda, rhs->vals, &ldb, &info);
-    info = SPLATT_LAPACKE(potrs)(LAPACK_COL_MAJOR, uplo,
+    info = SPLATT_LAPACKE(potrs)(
+        LAPACK_COL_MAJOR, uplo,
         order, nrhs,
         neqs, lda,
         rhs->vals, ldb);
@@ -610,45 +510,12 @@ void mat_solve_normals(
     /* restore gram matrix */
     p_form_gram(aTa[MAX_NMODES], aTa, mode, nmodes, reg);
 
-#if 0
-    int effective_rank;
-    val_t * conditions = splatt_malloc(N * sizeof(*conditions));
-
-    /* query worksize */
-    int lwork = -1;
-
-    val_t rcond = -1.0f;
-
-    val_t work_query;
-    LAPACK_DGELSS(&N, &N, &nrhs,
-        neqs, &lda,
-        rhs->vals, &ldb,
-        conditions, &rcond, &effective_rank,
-        &work_query, &lwork, &info);
-    lwork = (int) work_query;
-
-    /* setup workspace */
-    val_t * work = splatt_malloc(lwork * sizeof(*work));
-
-    /* Use an SVD solver */
-    LAPACK_DGELSS(&N, &N, &nrhs,
-        neqs, &lda,
-        rhs->vals, &ldb,
-        conditions, &rcond, &effective_rank,
-        work, &lwork, &info);
-    if(info) {
-      printf("SPLATT: DGELSS returned %d\n", info);
-    }
-    printf("SPLATT:   DGELSS effective rank: %d\n", effective_rank);
-
-    splatt_free(conditions);
-    splatt_free(work);
-#else
     /* Use column major to avoid any internal transposition. */
     val_t * conditions = splatt_malloc(N * sizeof(*conditions));
     val_t rcond = -1.0f;
     lapack_int effective_rank;
-    info = SPLATT_LAPACKE(gelss)(LAPACK_COL_MAJOR, N, N, nrhs,
+    info = SPLATT_LAPACKE(gelss)(
+        LAPACK_COL_MAJOR, N, N, nrhs,
         neqs, lda,
         rhs->vals, ldb,
         conditions, rcond, &effective_rank);
@@ -657,41 +524,11 @@ void mat_solve_normals(
     }
     printf("SPLATT:   DGELSS effective rank: %d\n", effective_rank);
     splatt_free(conditions);
-#endif
   }
 
   timer_stop(&timers[TIMER_INV]);
 }
 
-
-
-
-void calc_gram_inv(
-  idx_t const mode,
-  idx_t const nmodes,
-  matrix_t ** aTa)
-{
-  timer_start(&timers[TIMER_INV]);
-
-  idx_t const rank = aTa[0]->J;
-  val_t * const restrict av = aTa[MAX_NMODES]->vals;
-
-  /* ata[MAX_NMODES] = hada(aTa[0], aTa[1], ...) */
-  for(idx_t x=0; x < rank*rank; ++x) {
-    av[x] = 1.;
-  }
-  for(idx_t m=1; m < nmodes; ++m) {
-    idx_t const madjust = (mode + m) % nmodes;
-    val_t const * const vals = aTa[madjust]->vals;
-    for(idx_t x=0; x < rank*rank; ++x) {
-      av[x] *= vals[x];
-    }
-  }
-
-  /* M2 = M2^-1 */
-  mat_syminv(aTa[MAX_NMODES]);
-  timer_stop(&timers[TIMER_INV]);
-}
 
 
 

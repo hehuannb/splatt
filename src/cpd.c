@@ -324,17 +324,10 @@ double cpd_als_iterate(
       mttkrp_csf(tensors, mats, m, thds, opts);
       timer_stop(&timers[TIMER_MTTKRP]);
 
-#if 0
       /* M2 = (CtC .* BtB .* ...)^-1 */
-      calc_gram_inv(m, nmodes, aTa);
-      /* A = M1 * M2 */
-      memset(mats[m]->vals, 0, mats[m]->I * nfactors * sizeof(val_t));
-      mat_matmul(m1, aTa[MAX_NMODES], mats[m]);
-#else
       par_memcpy(mats[m]->vals, m1->vals, m1->I * nfactors * sizeof(val_t));
       mat_solve_normals(m, nmodes, aTa, mats[m],
           opts[SPLATT_OPTION_REGULARIZE]);
-#endif
 
       /* normalize columns and extract lambda */
       if(it == 0) {

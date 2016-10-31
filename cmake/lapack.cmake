@@ -2,9 +2,10 @@
 # just use MKL flag
 if (INTEL_OPT)
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -mkl")
+  add_definitions(-DSPLATT_INC_LAPACKE="mkl_lapacke.h")
 else()
 
-  # BLAS/LAPACK
+  # Download BLAS/LAPACK
   if (DEFINED DOWNLOAD_BLAS_LAPACK)
 
     message(WARNING "Downloading generic BLAS/LAPACK libraries.")
@@ -59,6 +60,5 @@ else()
       message(FATAL_ERROR "Could not find BLAS library. Run `./configure --help`  for assistance.")
     endif()
   endif()
-
 endif() # not INTEL_OPT
 

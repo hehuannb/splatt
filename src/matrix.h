@@ -70,37 +70,6 @@ void mat_matmul(
   matrix_t  * const C);
 
 
-#define mat_syminv splatt_mat_syminv
-/**
-* @brief Compute the 'inverse' of symmetric matrix A.
-*
-* @param A Symmetric FxF matrix.
-* @param Abuf FxF buffer space.
-*/
-void mat_syminv(
-  matrix_t * const A);
-
-
-#define mat_aTa_hada splatt_mat_aTa_hada
-/**
-* @brief Compute (A^T A * B^T B * C^T C ...) where * is the Hadamard product.
-*
-* @param mats An array of matrices.
-* @param start The first matrix to include.
-* @param end The last matrix to include. This can be before start because we
-*            operate modulo nmats.
-* @param nmats The number of matrices.
-* @param ret The FxF output matrix.
-*/
-void mat_aTa_hada(
-  matrix_t ** mats,
-  idx_t const start,
-  idx_t const end,
-  idx_t const nmats,
-  matrix_t * const buf,
-  matrix_t * const ret);
-
-
 #define mat_aTa splatt_mat_aTa
 /**
 * @brief Compute A^T * A with a nice row-major pattern.
@@ -116,28 +85,25 @@ void mat_aTa(
   thd_info * const thds,
   idx_t const nthreads);
 
-#define calc_gram_inv splatt_calc_gram_inv
+
+
+#define mat_solve_normals splatt_mat_solve_normals
 /**
-* @brief Calculate (BtB * CtC * ...)^-1, where * is the Hadamard product. This
-*        is the Gram Matrix of the CPD.
+* @brief Solve the normal equations stored in ata[:] against 'rhs'.
 *
-* @param mode Which mode we are operating on (it is not used in the product).
-* @param nmodes The number of modes in the tensor.
-* @param aTa An array of matrices (length MAX_NMODES)containing BtB, CtC, etc.
-*            [OUT] The result is stored in ata[MAX_NMODES].
+* @param mode The mode we are updating.
+* @param nmodes The total number of modes.
+* @param ata Already-computed (A^T * A) for each mode other than 'mode'.
+* @param rhs The RHS to solve against.
+* @param reg L2 regularization parameter.
 */
-void calc_gram_inv(
-  idx_t const mode,
-  idx_t const nmodes,
-  matrix_t ** aTa);
-
-
 void mat_solve_normals(
   idx_t const mode,
   idx_t const nmodes,
 	matrix_t * * ata,
   matrix_t * rhs,
   val_t const reg);
+
 
 #define mat_normalize splatt_mat_normalize
 /**
