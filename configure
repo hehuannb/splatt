@@ -97,7 +97,12 @@ show_help() {
   echo "  --with-lapack-lib=<lib>"
   echo "    Set the LAPACK library (e.g., /usr/.../liblapack.so)."
   echo "  --download-blas-lapack"
-  echo "    Download generic BLAS/LAPACK libraries (possible performance loss)."
+  echo "    Download OpenBLAS (git and Fortran compiler required)."
+  echo "  --with-fortran"
+  echo "    Link a against a Fortran library. Some LAPACK libraries require."
+  echo "  --with-fortran-lib"
+  echo "    Set the Fortran library (e.g., gfortran or ifort)."
+
 
   # Metis
   echo "";
@@ -211,6 +216,12 @@ for i in "${@}"; do
     ;;
     --download-blas-lapack)
       CONFIG_FLAGS="${CONFIG_FLAGS} -DDOWNLOAD_BLAS_LAPACK=TRUE"
+    ;;
+    --with-fortran)
+      CONFIG_FLAGS="${CONFIG_FLAGS} -DUSE_FORTRAN=TRUE"
+    ;;
+    --with-fortran-lib=*)
+      CONFIG_FLAGS="${CONFIG_FLAGS} -DUSER_FORTRAN_LIB=${i#*=}"
     ;;
 
 

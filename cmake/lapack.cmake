@@ -1,4 +1,6 @@
 
+include(CheckFunctionExists)
+
 # just use MKL flag
 if (INTEL_OPT)
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -mkl")
@@ -8,22 +10,27 @@ else()
   # Download BLAS/LAPACK
   if (DEFINED DOWNLOAD_BLAS_LAPACK)
 
-    message(WARNING "Downloading generic BLAS/LAPACK libraries.")
-    message(WARNING "  NOTE: performance may suffer.")
-    execute_process(COMMAND ${CMAKE_SOURCE_DIR}/scripts/download-blas-lapack.sh ${CMAKE_BINARY_DIR})
-
     # Enable linking against Fortran
     enable_language(Fortran)
 
-    set(USER_LAPACK_LIB ${CMAKE_BINARY_DIR}/lapack/lib/liblapack.a)
+    message(WARNING "Downloading OpenBLAS.")
+    if(${OPENMP_FOUND})
+      execute_process(COMMAND ${CMAKE_SOURCE_DIR}/scripts/download-blas-lapack.sh ${CMAKE_BINARY_DIR} CC=${CMAKE_C_COMPILER} FC=${CMAKE_Fortran_COMPILER} USE_OPENMP=1)
+    else()
+      execute_process(COMMAND ${CMAKE_SOURCE_DIR}/scripts/download-blas-lapack.sh ${CMAKE_BINARY_DIR} CC=${CMAKE_C_COMPILER} FC=${CMAKE_Fortran_COMPILER} USE_THREADS=1)
+    endif()
+
+    set(USER_LAPACK_LIB ${CMAKE_BINARY_DIR}/lapack/lib/libopenblas.a)
+    set(USER_BLAS_LIB ${CMAKE_BINARY_DIR}/lapack/lib/libopenblas.a)
+    set(SPLATT_INCLUDES ${SPLATT_INCLUDES} ${CMAKE_BINARY_DYR}/lapack/include)
 
     # Link against generic BLAS and a Fortran library.
     # TODO: Is there a better way to do this? The Fortran library must be added
     # AFTER BLAS/LAPACK.
     if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "Intel")
-      set(USER_BLAS_LIB ${CMAKE_BINARY_DIR}/lapack/lib/libblas.a ifcore)
+      set(USER_BLAS_LIB ${USER_BLAS_LIB} ifcore)
     else()
-      set(USER_BLAS_LIB ${CMAKE_BINARY_DIR}/lapack/lib/libblas.a gfortran)
+      set(USER_BLAS_LIB ${USER_BLAS_LIB} gfortran)
     endif()
 
     # avoid annoying warning
@@ -51,7 +58,6 @@ else()
   # auto find BLAS
   else()
     find_package(BLAS)
-    include_directories(${BLAS_INCLUDE_DIR})
     set(SPLATT_LIBS ${SPLATT_LIBS} ${BLAS_LIBRARIES})
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${BLAS_LINKER_FLAGS}")
     if(${BLAS_FOUND})
@@ -60,5 +66,21 @@ else()
       message(FATAL_ERROR "Could not find BLAS library. Run `./configure --help`  for assistance.")
     endif()
   endif()
+
+
+
+  # Make sure we actually have C bindings
+  set(CMAKE_REQUIRED_LIBRARIES ${SPLATT_LIBS})
+  CHECK_FUNCTION_EXISTS(LAPACKE_dpotrf HAVE_LAPACKE)
+  if(NOT ${HAVE_LAPACKE})
+    message(FATAL_ERROR "LAPACK library does not export C bindings (LAPACKE). Run `./configure --help for assistance.")
+  endif()
+
+  CHECK_FUNCTION_EXISTS(cblas_dgemm HAVE_CBLAS)
+  if(NOT ${HAVE_CBLAS})
+    message(FATAL_ERROR "BLAS library does not export C bindings (CBLAS). Run `./configure --help for assistance.")
+  endif()
+  set(CMAKE_REQUIRED_LIBRARIES "")
+
 endif() # not INTEL_OPT
 

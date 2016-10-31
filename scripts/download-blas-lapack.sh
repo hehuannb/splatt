@@ -1,24 +1,16 @@
 #!/bin/bash
 
-LAPACK_VERSION=3.6.1
-LAPACK_LOC=http://www.netlib.org/lapack/lapack-${LAPACK_VERSION}.tgz
-
 if [ "$#" -eq 0 ]; then
-  echo "usage: <build directory>";
+  echo "usage: <build directory> [FLAGS]";
   exit 1;
 fi
 
-wget ${LAPACK_LOC} --output-document=$1/lapack.tgz;
+CLONEDIR=$1/openblas
+OPENBLAS_LOC=https://github.com/xianyi/OpenBLAS.git
+git clone ${OPENBLAS_LOC} ${CLONEDIR}
 
-pushd $1/
-tar xf lapack.tgz
-rm lapack.tgz;
-
-mv lapack-${LAPACK_VERSION} lapack
-pushd lapack
-cmake .
-make -j
-
-popd
+pushd ${CLONEDIR}
+make -j "${@:2}"
+make PREFIX=$1/lapack install
 popd
 

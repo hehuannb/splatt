@@ -6,6 +6,10 @@ include(cmake/version.cmake)
 # Libraries to link against -- will concatenate to this
 set(SPLATT_LIBS splatt m)
 
+# Directories to include (lapack, etc.)
+set(SPLATT_INCLUDES "")
+
+
 # Intel customization
 if(DEFINED INTEL_OPT)
   set(INTEL_OPT true)
@@ -24,10 +28,11 @@ include(cmake/debug.cmake)
 include(cmake/flags.cmake)
 
 # Libraries
-include(cmake/lapack.cmake)
 include(cmake/openmp.cmake)
+include(cmake/lapack.cmake)
 include(cmake/mpi.cmake)
 include(cmake/partition.cmake)
+include(cmake/fortran.cmake)
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
