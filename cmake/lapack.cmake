@@ -5,6 +5,7 @@ include(CheckFunctionExists)
 if (INTEL_OPT)
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -mkl")
   add_definitions(-DSPLATT_INC_LAPACKE="mkl_lapacke.h")
+  add_definitions(-DSPLATT_INC_CBLAS="mkl_cblas.h")
 else()
 
   # Download BLAS/LAPACK
@@ -80,6 +81,7 @@ else()
   #
   if("${LAPACK_LIBRARIES}" MATCHES "mkl")
     add_definitions(-DSPLATT_INC_LAPACKE="mkl_lapacke.h")
+    add_definitions(-DSPLATT_INC_CBLAS="mkl_cblas.h")
   endif()
 
   #
