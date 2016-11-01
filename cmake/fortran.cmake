@@ -11,14 +11,17 @@ if (DEFINED USE_FORTRAN)
     message(STATUS "Using user supplied Fortran library=${USER_FORTRAN_LIB}")
     set(SPLATT_LIBS ${SPLATT_LIBS} ${USER_FORTRAN_LIB})
 
-  # Try popular ones.
   else()
 
-    # TODO search better
+    # Try popular ones.
     if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "Intel")
-      set(SPLATT_LIBS ${SPLATT_LIBS} ifcore)
+      set(FORT_LIB ifcore)
     else()
-      set(SPLATT_LIBS ${SPLATT_LIBS} gfortran)
+      set(FORT_LIB gfortran)
     endif()
+    
+    # Find and use the library.
+    find_library(FORTRAN_LIB ${FORT_LIB})
+    set(SPLATT_LIBS ${SPLATT_LIBS} ${FORTRAN_LIB})
   endif()
 endif()
